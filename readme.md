@@ -22,7 +22,6 @@ training data format:
 .txt for each game
 
 champ1 #string with name of champ
-
 champ2 #champ 1-5 is blue 6-10 is red
 champ3
 champ4
