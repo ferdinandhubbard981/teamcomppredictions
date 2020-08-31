@@ -4,6 +4,6 @@ def reset(filename):
         print("wiped")
 
 if __name__ == "__main__":
-    reset("newaccountids.txt")
-    reset("oldaccountids.txt")
+    reset("newsummonernames.bin")
+    reset("oldsummonernames.txt") #useless
     reset("oldgameids.txt")
