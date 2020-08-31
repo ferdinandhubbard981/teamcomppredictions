@@ -17,8 +17,11 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
         actualindex = index
         if randomapikey == False:
             actualindex = 0
-
-        response = requests.get(url + apikeys[actualindex]).json()
+        try:
+            response = requests.get(url + apikeys[actualindex]).json()
+        except OSError:
+            print("disconnected")
+            time.sleep(1)
         #print(url + apikeys[actualindex])
         try:
             if response["status"]["status_code"] == 429:
@@ -44,6 +47,8 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
             successful = True
         except TimeoutError:
             print("timeout")
+        except TypeError:
+            pass
     return response
 
 
@@ -219,11 +224,29 @@ def cycle(summonername):
 
 
 def main():
-    numofplayeriterations = 1
-    summonernames = getnewsummonernames(numofplayeriterations)
-    summonernames = ["hubbix"] #if newsummonernames.txt is empty
-    for summonername in summonernames:
-        cycle(summonername)
+    numofplayeriterations = 10
+    #summonernames = ["hubbix"] #if newsummonernames.txt is empty
+    #for i in range(numofplayeriterations)
+    #    summonernames = getnewsummonernames(1)
+    #    cycle(summonername) #for a fixed number of iterations
+    while True:
+        try:
+            summonernames = getnewsummonernames(1)
+            if (len(summonernames) == 0):
+                print("no summoner names")
+                sys.exit()
+            cycle(summonernames[0])
+        except KeyboardInterrupt:
+            print("copy all files from backup into main folder and overwrite")
+            continue
+        try:
+            for i in range(100):
+                print("you can quit safely now")
+            time.sleep(5)
+        except KeyboardInterrupt:
+            print("all files ok")
+            continue
+
     print ("success: " + str(success) + " failed: " + str(failed))
 
 if __name__ == "__main__":
