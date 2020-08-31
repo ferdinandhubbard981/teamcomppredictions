@@ -21,14 +21,17 @@ training data format:
 
 .txt for each game
 
-champ1 #string with name of champ
-champ2 #champ 1-5 is blue 6-10 is red
-champ3
-champ4
-champ5
-champ6
-champ7
-champ8
-champ9
-champ10
-outcome #true for win false for loss
+champ1 teamblue top
+champ2 teamblue jgl
+champ3 teamblue mid
+champ4 teamblue adc
+champ5 teamblue sup
+champ6 teamred top
+champ7 teamred jgl
+champ8 teamred mid
+champ9 teamred adc
+champ10 teamred sup
+outcome #true for win false for loss relative to blue team
+
+team100 is blue team
+team200 is red team

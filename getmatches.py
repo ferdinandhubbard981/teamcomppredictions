@@ -8,7 +8,7 @@ index = 1
 failed = 0
 success = 0
 def sendrequest(url, randomapikey): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
-    apikeys = ["RGAPI-94872c2a-cb5e-4f46-bec1-74a9da9e45e9", "RGAPI-9fdbc9a6-1a65-4b82-bfe0-fe5bfcc57370", "RGAPI-f2bee3bb-5033-4a31-ada4-3225b0aeda72"]
+    apikeys = []
     global index
     #index = 1 #primary api key is only used for the operations that require a constant api key (explained above) others can be used interchangeably for when rate limit is reached
     successful = False
