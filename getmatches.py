@@ -3,12 +3,13 @@ import time
 from shutil import copyfile
 import sys
 import json
+from os import remove
 
 index = 1
 failed = 0
 success = 0
 def sendrequest(url, randomapikey): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
-    apikeys = []
+    apikeys = ["RGAPI-e52d192d-d543-46ef-8b1b-c0fd9d305bb4", "RGAPI-c74a59dd-5439-4163-8d39-bfd604c6c659", "RGAPI-bd41035e-4faa-4ddb-ba4d-1b254fab8ed3"]
     global index
     #index = 1 #primary api key is only used for the operations that require a constant api key (explained above) others can be used interchangeably for when rate limit is reached
     successful = False
@@ -33,11 +34,17 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
                 time.sleep(0.5)
 
             elif response["status"]["status_code"] == 403:
-                print("\n wrong api key or it had expired\n")
+                print("\n wrong api key or it has expired\n")
                 if randomapikey == True:
                     index += 1
                     if index == len(apikeys):
                         index = 1
+
+            elif response["status"]["status_code"] == 404:
+                print("\n 404 error message: " + response["status"]["message"] + "\n")
+                if "summoner not found" in response["status"]["message"]:
+                    print("summoner account doesn't exist anymore")
+                return "error"
 
             else:
                 print("\nunknown error, status code: " + str(response["status"]["status_code"]) + "\n")
@@ -55,6 +62,8 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
 def getmatchhistoryids(encryptedaccountid):
     url = "https://euw1.api.riotgames.com/lol/match/v4/matchlists/by-account/" + encryptedaccountid + "?api_key="
     response = sendrequest(url, False) #use primary api key
+    if response == "error":
+        return ["error"]
     gameids = []
     for game in response["matches"]:
         if game["queue"] == 420:
@@ -69,6 +78,8 @@ def writeoldgameids(gameids):
 def getencryptedaccountid(summonername):
     url = "https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-name/" + summonername + "?api_key="
     response = sendrequest(url, False) #use primary api key
+    if response == "error":
+        return response
     return response["accountId"]
 
 def addchampstoorderedlist(response):
@@ -128,6 +139,8 @@ def getteamblueresult(response):
 def getgamedata(gameid):
         url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
         response = sendrequest(url, True) #use random api key
+        if response == "error":
+            return ["error"]
         champions = addchampstoorderedlist(response)
         champions = convertchampsfromidtoname(champions)
         teamblueresult = getteamblueresult(response)
@@ -144,6 +157,8 @@ def writegamedatatofile(gamedata, gameid):
 def getplayers(gameid):
     url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
     response = sendrequest(url, True) #random api key works if getting summonerName, not accountid
+    if response == "error":
+        return ["error"]
     playernames = []
     for participant in response["participantIdentities"]:
         playernames.append(participant["player"]["summonerName"].replace(" ", ""))
@@ -173,6 +188,9 @@ def getnewsummonernames(amount):
     chosensummonernames = []
     allsummonernames = []
 
+    remove("backup/newsummonernames.bin")
+    remove("backup/oldgameids.txt")
+    remove("backup/oldsummonernames.txt")
     copyfile("newsummonernames.bin", "backup/newsummonernames.bin")
     copyfile("oldgameids.txt", "backup/oldgameids.txt")     #backup
     copyfile("oldsummonernames.txt", "backup/oldsummonernames.txt")
@@ -189,15 +207,31 @@ def getnewsummonernames(amount):
             f.write((summonername + " ").encode("utf-8"))
 
     return chosensummonernames
+def checkerror(data):
 
+    try:
+        if data[0] == "error":
+            return True
+        else:
+            return False
+    except IndexError:
+        return True
 def cycle(summonername):
     global failed, success
     accountid = getencryptedaccountid(summonername)
+    if checkerror([accountid]):
+            return
+
+
     gameids = getmatchhistoryids(accountid) #used less often
+    if checkerror(gameids):
+        return
     gameids = deleterepeatedgameids(gameids) #used less often
     players = []
     for gameid in gameids:
         newplayers = getplayers(gameid) #used frequently
+        if checkerror(newplayers):
+            continue
         try:
             newplayers.remove(summonername)
         except ValueError:
@@ -208,6 +242,8 @@ def cycle(summonername):
             players.append(player)
 
         gamedata = getgamedata(gameid) #used frequently
+        if checkerror(gamedata):
+            continue
         if None in gamedata:
             print("line 68 function, addchampstoorderedlist 'role' might be None")
             failed += 1
@@ -225,26 +261,29 @@ def cycle(summonername):
 
 def main():
     numofplayeriterations = 10
+    loop = True
     #summonernames = ["hubbix"] #if newsummonernames.txt is empty
     #for i in range(numofplayeriterations)
     #    summonernames = getnewsummonernames(1)
     #    cycle(summonername) #for a fixed number of iterations
-    while True:
+    while loop:
         try:
             summonernames = getnewsummonernames(1)
             if (len(summonernames) == 0):
-                print("no summoner names")
+                print("no summoner names, files are ok")
                 sys.exit()
             cycle(summonernames[0])
+            for i in range(5):
+                print("moving to new player")
         except KeyboardInterrupt:
-            print("copy all files from backup into main folder and overwrite")
-            continue
-        try:
-            for i in range(100):
-                print("you can quit safely now")
-            time.sleep(5)
-        except KeyboardInterrupt:
-            print("all files ok")
+            remove("newsummonernames.bin")
+            remove("oldgameids.txt")
+            remove("oldsummonernames.txt")
+            copyfile("backup/newsummonernames.bin", "newsummonernames.bin")
+            copyfile("backup/oldgameids.txt", "oldgameids.txt")     #backup
+            copyfile("backup/oldsummonernames.txt", "oldsummonernames.txt")
+            #print("copy all files from backup into main folder and overwrite")
+            loop = False
             continue
 
     print ("success: " + str(success) + " failed: " + str(failed))
