@@ -12,7 +12,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 failed = 0
 success = 0
 def sendrequest(url, index, indexoverride=None): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
-    apikeys = ["RGAPI-0d984397-4e0f-4eaa-84b0-eb7141d49808", "RGAPI-b3b75d21-f885-4b15-9a84-8dd8b781b196", "RGAPI-18ff159c-b686-4ab7-b839-8feb3d2bc65e", "RGAPI-8573e1b3-7378-4e91-b6a2-999d49c55577", "RGAPI-de6540b5-63c1-4df2-8bc9-8d093fa054f8"]
+    apikeys = []
     #index = 1 #primary api key is only used for the operations that require a constant api key (explained above) others can be used interchangeably for when rate limit is reached
     successful = False
     response = []
@@ -138,17 +138,21 @@ def getteamblueresult(response):
         if team["teamId"] == 100:
             return team["win"] #Win or Fail
 
-def getgamedata(gameid, index):
-        url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
-        response, index = sendrequest(url, index) #use random api key
-        if response == "error":
-            return ["error"], index
-        champions = addchampstoorderedlist(response)
+def getmatchdata(gameid, index):
+    url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
+    response, index = sendrequest(url, index) #use random api key
+    if response == "error":
+        return ["error"], index
+
+    return response, index
+
+def getgamedata(matchdata):
+        champions = addchampstoorderedlist(matchdata)
         champions = convertchampsfromidtoname(champions)
-        teamblueresult = getteamblueresult(response)
+        teamblueresult = getteamblueresult(matchdata)
         gamedata = champions
         gamedata.append(teamblueresult)
-        return gamedata, index
+        return gamedata
 
 def writegamedatatofile(gamedata, gameid):
     with open("games/" + str(gameid) + ".txt", "w") as f:
@@ -156,15 +160,14 @@ def writegamedatatofile(gamedata, gameid):
             f.write(str(entry) + "\n")
 
 
-def getplayers(gameid, index):
-    url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
-    response, index = sendrequest(url, index) #random api key works if getting summonerName, not accountid
-    if response == "error":
-        return ["error"], index
+def getplayers(matchdata):
     playernames = []
-    for participant in response["participantIdentities"]:
-        playernames.append(participant["player"]["summonerName"].replace(" ", ""))
-    return playernames, index
+    try:
+        for participant in matchdata["participantIdentities"]:
+            playernames.append(participant["player"]["summonerName"].replace(" ", ""))
+    except:
+        return ["key error"]
+    return playernames
 
 def writenewsummonernames(summonernames):
     with open("newsummonernames.bin", "ab") as f:
@@ -218,6 +221,9 @@ def checkerror(data):
             return False
     except IndexError:
         return True
+    except KeyError:
+        return False
+
 def cycle(summonername):
     global failed, success
     index = 0
@@ -231,9 +237,13 @@ def cycle(summonername):
     gameids = deleterepeatedgameids(gameids)
     players = []
     for gameid in gameids:
-        newplayers, index = getplayers(gameid, index) #used frequently
-        if checkerror(newplayers):
+        matchdata, index = getmatchdata(gameid, index)
+        if checkerror(matchdata):
             continue
+        newplayers = getplayers(matchdata) #used frequently
+        if newplayers[0] == "key error":
+            continue
+
         try:
             newplayers.remove(summonername)
         except ValueError:
@@ -243,9 +253,7 @@ def cycle(summonername):
         for player in newplayers: #repeatedly merging the newplayers list to the full players list
             players.append(player)
 
-        gamedata, index = getgamedata(gameid, index) #used frequently
-        if checkerror(gamedata):
-            continue
+        gamedata = getgamedata(matchdata) #used frequently
         if None in gamedata:
             print("line 68 function, addchampstoorderedlist 'role' might be None")
             failed += 1
@@ -262,7 +270,8 @@ def cycle(summonername):
 
 
 def main():
-    threadcount = 50
+    start_time = time.time()
+    threadcount = 100
     loop = True
     #summonernames = ["hubbix"] #if newsummonernames.txt is empty
     #for i in range(numofplayeriterations)
@@ -276,11 +285,8 @@ def main():
                 sys.exit()
             pool = ThreadPool(threadcount)
             results = pool.map(cycle, summonernames)
-            #cycle(summonernames[0])
-
-            for i in range(100):
-                print("finished " + str(len(summonernames))  + " cycles")
-            time.sleep(10)
+            #cycle(summonernames[0]) #for no multi threading
+            #break #for only one iteration
         except KeyboardInterrupt:
             pool.terminate()
             remove("newsummonernames.bin")
@@ -292,10 +298,19 @@ def main():
             #print("copy all files from backup into main folder and overwrite")
             loop = False
             continue
+
         pool.terminate()
+        try:
+            for i in range(100):
+                print("finished " + str(len(summonernames))  + " cycles")
+
+            time.sleep(10)
+            start_time + 10
+        except KeyboardInterrupt:
+            break
+
     print ("success: " + str(success) + " failed: " + str(failed))
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 if __name__ == "__main__":
-    start_time = time.time()
     main()
-    print("--- %s seconds ---" % (time.time() - start_time))
