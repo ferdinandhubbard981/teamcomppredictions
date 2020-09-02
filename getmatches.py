@@ -1,23 +1,25 @@
+import time
 import requests
 import time
 from shutil import copyfile
 import sys
 import json
 from os import remove
+from multiprocessing import Process
+from multiprocessing.dummy import Pool as ThreadPool
 
-index = 1
+
 failed = 0
 success = 0
-def sendrequest(url, randomapikey): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
-    apikeys = ["RGAPI-e52d192d-d543-46ef-8b1b-c0fd9d305bb4", "RGAPI-c74a59dd-5439-4163-8d39-bfd604c6c659", "RGAPI-bd41035e-4faa-4ddb-ba4d-1b254fab8ed3"]
-    global index
+def sendrequest(url, index, indexoverride=None): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
+    apikeys = ["RGAPI-0d984397-4e0f-4eaa-84b0-eb7141d49808", "RGAPI-b3b75d21-f885-4b15-9a84-8dd8b781b196", "RGAPI-18ff159c-b686-4ab7-b839-8feb3d2bc65e", "RGAPI-8573e1b3-7378-4e91-b6a2-999d49c55577", "RGAPI-de6540b5-63c1-4df2-8bc9-8d093fa054f8"]
     #index = 1 #primary api key is only used for the operations that require a constant api key (explained above) others can be used interchangeably for when rate limit is reached
     successful = False
     response = []
     while successful == False:
         actualindex = index
-        if randomapikey == False:
-            actualindex = 0
+        if indexoverride != None:
+            actualindex = indexoverride
         try:
             response = requests.get(url + apikeys[actualindex]).json()
         except OSError:
@@ -26,25 +28,25 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
         #print(url + apikeys[actualindex])
         try:
             if response["status"]["status_code"] == 429:
-                print("\nrate limit exceeded\n")
-                if randomapikey == True:
+                print("\nrate limit exceeded on index " + str(actualindex) + "\n")
+                if indexoverride == None:
                     index += 1
                     if index == len(apikeys):
-                        index = 1
+                        index = 0
                 time.sleep(0.5)
 
             elif response["status"]["status_code"] == 403:
-                print("\n wrong api key or it has expired\n")
-                if randomapikey == True:
+                print("\n wrong api key or it has expired with index " + str(actualindex) + "\n")
+                if indexoverride == None:
                     index += 1
                     if index == len(apikeys):
-                        index = 1
+                        index = 0
 
             elif response["status"]["status_code"] == 404:
                 print("\n 404 error message: " + response["status"]["message"] + "\n")
                 if "summoner not found" in response["status"]["message"]:
                     print("summoner account doesn't exist anymore")
-                return "error"
+                return "error", index
 
             else:
                 print("\nunknown error, status code: " + str(response["status"]["status_code"]) + "\n")
@@ -56,31 +58,31 @@ def sendrequest(url, randomapikey): #apikeys index 0 will always be my main acco
             print("timeout")
         except TypeError:
             pass
-    return response
+    return response, index
 
 
-def getmatchhistoryids(encryptedaccountid):
+def getmatchhistoryids(encryptedaccountid, index):
     url = "https://euw1.api.riotgames.com/lol/match/v4/matchlists/by-account/" + encryptedaccountid + "?api_key="
-    response = sendrequest(url, False) #use primary api key
+    response, index = sendrequest(url, index, indexoverride=index) #use primary api key
     if response == "error":
-        return ["error"]
+        return ["error"], index
     gameids = []
     for game in response["matches"]:
         if game["queue"] == 420:
             gameids.append(game["gameId"])
-    return gameids
+    return gameids, index
 
 def writeoldgameids(gameids):
     with open("oldgameids.txt", "a") as f:
         for gameid in gameids:
             f.write(str(gameid) + "\n")
 
-def getencryptedaccountid(summonername):
+def getencryptedaccountid(summonername, index):
     url = "https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-name/" + summonername + "?api_key="
-    response = sendrequest(url, False) #use primary api key
+    response, index = sendrequest(url, index) #use primary api key
     if response == "error":
-        return response
-    return response["accountId"]
+        return response, index
+    return response["accountId"], index
 
 def addchampstoorderedlist(response):
     champions = [None] * 10
@@ -136,17 +138,17 @@ def getteamblueresult(response):
         if team["teamId"] == 100:
             return team["win"] #Win or Fail
 
-def getgamedata(gameid):
+def getgamedata(gameid, index):
         url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
-        response = sendrequest(url, True) #use random api key
+        response, index = sendrequest(url, index) #use random api key
         if response == "error":
-            return ["error"]
+            return ["error"], index
         champions = addchampstoorderedlist(response)
         champions = convertchampsfromidtoname(champions)
         teamblueresult = getteamblueresult(response)
         gamedata = champions
         gamedata.append(teamblueresult)
-        return gamedata
+        return gamedata, index
 
 def writegamedatatofile(gamedata, gameid):
     with open("games/" + str(gameid) + ".txt", "w") as f:
@@ -154,15 +156,15 @@ def writegamedatatofile(gamedata, gameid):
             f.write(str(entry) + "\n")
 
 
-def getplayers(gameid):
+def getplayers(gameid, index):
     url = "https://euw1.api.riotgames.com/lol/match/v4/matches/" + str(gameid) + "?api_key="
-    response = sendrequest(url, True) #random api key works if getting summonerName, not accountid
+    response, index = sendrequest(url, index) #random api key works if getting summonerName, not accountid
     if response == "error":
-        return ["error"]
+        return ["error"], index
     playernames = []
     for participant in response["participantIdentities"]:
         playernames.append(participant["player"]["summonerName"].replace(" ", ""))
-    return playernames
+    return playernames, index
 
 def writenewsummonernames(summonernames):
     with open("newsummonernames.bin", "ab") as f:
@@ -218,18 +220,18 @@ def checkerror(data):
         return True
 def cycle(summonername):
     global failed, success
-    accountid = getencryptedaccountid(summonername)
+    index = 0
+    accountid, index = getencryptedaccountid(summonername, index) #used less often
     if checkerror([accountid]):
             return
 
-
-    gameids = getmatchhistoryids(accountid) #used less often
+    gameids, index = getmatchhistoryids(accountid, index) #used less often
     if checkerror(gameids):
         return
-    gameids = deleterepeatedgameids(gameids) #used less often
+    gameids = deleterepeatedgameids(gameids)
     players = []
     for gameid in gameids:
-        newplayers = getplayers(gameid) #used frequently
+        newplayers, index = getplayers(gameid, index) #used frequently
         if checkerror(newplayers):
             continue
         try:
@@ -241,7 +243,7 @@ def cycle(summonername):
         for player in newplayers: #repeatedly merging the newplayers list to the full players list
             players.append(player)
 
-        gamedata = getgamedata(gameid) #used frequently
+        gamedata, index = getgamedata(gameid, index) #used frequently
         if checkerror(gamedata):
             continue
         if None in gamedata:
@@ -260,7 +262,7 @@ def cycle(summonername):
 
 
 def main():
-    numofplayeriterations = 10
+    threadcount = 50
     loop = True
     #summonernames = ["hubbix"] #if newsummonernames.txt is empty
     #for i in range(numofplayeriterations)
@@ -268,14 +270,19 @@ def main():
     #    cycle(summonername) #for a fixed number of iterations
     while loop:
         try:
-            summonernames = getnewsummonernames(1)
+            summonernames = getnewsummonernames(threadcount)
             if (len(summonernames) == 0):
                 print("no summoner names, files are ok")
                 sys.exit()
-            cycle(summonernames[0])
-            for i in range(5):
-                print("moving to new player")
+            pool = ThreadPool(threadcount)
+            results = pool.map(cycle, summonernames)
+            #cycle(summonernames[0])
+
+            for i in range(100):
+                print("finished " + str(len(summonernames))  + " cycles")
+            time.sleep(10)
         except KeyboardInterrupt:
+            pool.terminate()
             remove("newsummonernames.bin")
             remove("oldgameids.txt")
             remove("oldsummonernames.txt")
@@ -285,8 +292,10 @@ def main():
             #print("copy all files from backup into main folder and overwrite")
             loop = False
             continue
-
+        pool.terminate()
     print ("success: " + str(success) + " failed: " + str(failed))
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    print("--- %s seconds ---" % (time.time() - start_time))
