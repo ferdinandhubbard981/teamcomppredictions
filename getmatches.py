@@ -4,15 +4,15 @@ import time
 from shutil import copyfile
 import sys
 import json
-from os import remove
+from os import remove, environ
 from multiprocessing import Process
 from multiprocessing.dummy import Pool as ThreadPool
-
-
+# set api keys as list "['apikey1', 'apikey2']"
+apikeys = json.loads(environ["apikeys"])
 failed = 0
 success = 0
 def sendrequest(url, index, indexoverride=None): #apikeys index 0 will always be my main account due to riot games attempt at preventing the use of multiple developer api keys
-    apikeys = []
+    #apikeys = []
     #index = 1 #primary api key is only used for the operations that require a constant api key (explained above) others can be used interchangeably for when rate limit is reached
     successful = False
     response = []
