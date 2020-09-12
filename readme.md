@@ -37,3 +37,15 @@ outcome #true for win false for loss relative to blue team
 
 team100 is blue team
 team200 is red team
+
+
+
+Files:
+
+getmatches.py 
+              - gets game data and saves each game individually as a txt file
+              - gets all summonernames from past games and adds them to newsummonernames.txt (deleting the old ones)
+              - adds old games to the old gameids list and oldsummonernames to oldsummonernames.txt
+              
+converdata.py
+              - converts txt game data to two json files: data.json, labels.json (which are compressed to .rar and used to train the neural network)
