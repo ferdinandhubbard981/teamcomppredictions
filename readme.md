@@ -4,18 +4,20 @@ neural network:
 
 inputs:
   - champion
-  - x10 where the first 5 are team blue and last 5 are team red
-outputs:
-  - lose
-  - win
+  - x10 where the first 5 champions are team blue and last 5 are team red
 
-workflow:
+outputs:
+  - Win
+  - Lose
+
+scheme of work:
   - get all match id from past games of player (within last week due to API)
-  - get all 9 summoner names of past games of player (within the last major patch)
+  - get all 9 summoner names(excluding you) of past games of player (within the last major patch)
   - format champion data from games
   - repeat until enough data
+  - find good hyperparameters for neural network (bayesian optimization)
   - train neural network with data and outcomes
-  - write script to get champion select picks and calculate odds in real time
+  - write script to get champion select picks (from memory) and calculate odds in real time
 
 training data format:
 
